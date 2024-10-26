@@ -10,6 +10,7 @@ import numpy as np
 import geopy.distance
 from typing import Self
 from icecream import ic
+from mpl_toolkits.basemap import Basemap
 import matplotlib.pyplot as plt
 
 FILENAME = "italy.csv"
@@ -18,7 +19,7 @@ TOURNAMENTS = 2
 REPRODUCTIVE_RATE = 2
 PARENTS = 10
 CHAMPIONS_PER_TOURNAMENT = 0
-MUTATION_RATE = 0.4
+MUTATION_RATE = 0.6
 MAX_AGE = 1
 MIN_ITERS = 400
 WINDOW_SIZE = 2
@@ -65,6 +66,42 @@ class Geneset:
 
     def __le__(self, other):
         return self.cost <= other.cost
+
+    def plot(self, df):
+        points = df[["lat", "lon"]].values[self.genes]
+        # Create a Basemap instance
+        m = Basemap(
+            projection="aeqd",
+            resolution=None,
+            llcrnrlon=min(points[:, 1]) - 1,
+            llcrnrlat=min(points[:, 0]) - 1,
+            urcrnrlon=max(points[:, 1]) + 1,
+            urcrnrlat=max(points[:, 0]) + 1,
+            lat_0=points[len(points) // 2, 0],
+            lon_0=points[len(points) // 2, 1],
+        )
+        m.shadedrelief()
+
+        # Draw coastlines and country boundaries
+        # m.drawcoastlines()
+        # m.drawcountries()
+
+        # Draw parallels and meridians
+        # m.drawparallels(np.arange(-90.0, 91.0, 1.0), labels=[1, 0, 0, 0])
+        # m.drawmeridians(np.arange(-180.0, 181.0, 1.0), labels=[0, 0, 0, 1])
+
+        # Convert latitude and longitude to map projection coordinates
+        x, y = m(points[:, 1], points[:, 0])
+
+        m.plot([x[-1], x[0]], [y[-1], y[0]], "-", color="red")
+        m.plot(x, y, "o-", color="orange")
+        plt.title(f"TSP - {FILENAME} - cost: {self.cost:.2f}")
+        plt.show()
+
+    def format_wolfram(self):
+        return "Uninplemented"
+        # BUG This is valid in wolfram but the indexes don't correspond to the correct cities
+        # return "{" + ", ".join(map(str, self.genes + 1)) + ", 1}"
 
 
 def xover(population):  # TODO proper crossover
@@ -134,8 +171,7 @@ def main(filename):
     )
     compute_costs(population, distance_matrix)
 
-    best_geneset = population[0].genes
-    best_cost = population[0].cost
+    best_geneset = population[np.argmin([g.cost for g in population])]
     i = 0
     history = []
 
@@ -164,9 +200,8 @@ def main(filename):
             population = select(population)
 
             history.append([g.cost for g in population])
-            if population[0].cost < best_cost:
-                best_cost = population[0].cost
-                best_geneset = population[0].genes
+            if population[0].cost < best_geneset.cost:
+                best_geneset = population[0]
 
             improvement_rate = (
                 (history[-1][0] - history[-i // WINDOW_SIZE][0]) / (i // WINDOW_SIZE)
@@ -187,14 +222,13 @@ def main(filename):
             marker=".",
         )
     ax.plot([h[0] for h in history], color="red")
-    ax.set_title(f"iterations: {i} - best cost: {best_cost:.2f}")
+    ax.set_title(f"iterations: {i} - best cost: {best_geneset.cost:.2f}")
     print(f"Iterations: {i}")
-    print(f"Path cost: {best_cost:.2f}")
-    print(f"visited cities:\n{df.iloc[best_geneset].name}")
-    print(
-        f"Wolfram-coded path: {{{', '.join(f'{best_geneset + 1}'[1:-1].split())}, 1}}"
-    )
-    plt.show()
+    print(f"Path cost: {best_geneset.cost:.2f}")
+    print(f"visited cities:\n{df.iloc[best_geneset.genes].name}")
+    print(f"Wolfram-coded path: {best_geneset.format_wolfram()}")
+    # plt.show()
+    best_geneset.plot(df)
 
 
 if __name__ == "__main__":
