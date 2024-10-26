@@ -115,7 +115,6 @@ class EA:
 
     def mutate(self, population: np.ndarray):
         mutated_population = np.empty_like(population)
-        # np.apply_along_axis(, 0, population)
         for i, child in enumerate(population):
             mutated_population[i] = child.mutate(
                 self.mutation_strategy, self.mutation_prob

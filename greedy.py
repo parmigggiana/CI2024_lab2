@@ -14,5 +14,4 @@ def main(df):
             np.where(mask, dist_mat[geneset._true_genes[i - 1]], np.inf)
         )
         geneset._true_genes[i] = next_shortest_node
-        # ic(i, geneset.genes[i - 1], next_shortest_node)
     return geneset

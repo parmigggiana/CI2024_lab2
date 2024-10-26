@@ -124,7 +124,11 @@ if __name__ == "__main__":
         best_geneset, iterations, history = ea.run(starting_geneset)
         end = time.perf_counter()
         elapsed = end - start
-        elapsed = f"{elapsed}s" if elapsed < 60 else f"{elapsed//60}m {elapsed%60:.2f}s"
+        elapsed = (
+            f"{elapsed:.2f}s"
+            if elapsed < 60
+            else f"{elapsed//60:.0f}m {elapsed%60:.2f}s"
+        )
         print(f"Iterations: {iterations}")
         print(f"Elapsed time: {elapsed}")
         print(f"Path cost: {best_geneset.cost:.2f}")

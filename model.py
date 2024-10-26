@@ -127,16 +127,7 @@ class Geneset:
 
     def plot(self):
         points = df[["lat", "lon"]].values[self._true_genes]
-        # m = Basemap(
-        #     projection="aeqd",
-        #     resolution=None,
-        #     llcrnrlon=min(points[:, 1]) - 1,
-        #     llcrnrlat=min(points[:, 0]) - 1,
-        #     urcrnrlon=max(points[:, 1]) + 1,
-        #     urcrnrlat=max(points[:, 0]) + 1,
-        #     lat_0=points[len(points) // 2, 0],
-        #     lon_0=points[len(points) // 2, 1],
-        # )
+
         m = Basemap(
             projection="merc",
             resolution=None,
@@ -175,11 +166,8 @@ class Geneset:
                 child[j] = parent2._genes[i]
                 j += 1
 
-        try:
-            for i in np.arange(parent2._len):
-                if parent2._genes[i] not in child:
-                    child[j] = parent2._genes[i]
-                    j += 1
-        except IndexError as e:
-            raise e
+        for i in np.arange(parent2._len):
+            if parent2._genes[i] not in child:
+                child[j] = parent2._genes[i]
+                j += 1
         return Geneset(np.concatenate([[self._true_genes[0]], child]))
