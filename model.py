@@ -5,9 +5,8 @@ import geopy.distance
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from mpl_toolkits.basemap import Basemap
-
 from icecream import ic
+from mpl_toolkits.basemap import Basemap
 
 rng = np.random.Generator(bit_generator=np.random.PCG64(0xDEADBEEF))
 
@@ -128,15 +127,24 @@ class Geneset:
 
     def plot(self):
         points = df[["lat", "lon"]].values[self._true_genes]
+        # m = Basemap(
+        #     projection="aeqd",
+        #     resolution=None,
+        #     llcrnrlon=min(points[:, 1]) - 1,
+        #     llcrnrlat=min(points[:, 0]) - 1,
+        #     urcrnrlon=max(points[:, 1]) + 1,
+        #     urcrnrlat=max(points[:, 0]) + 1,
+        #     lat_0=points[len(points) // 2, 0],
+        #     lon_0=points[len(points) // 2, 1],
+        # )
         m = Basemap(
-            projection="aeqd",
+            projection="merc",
             resolution=None,
             llcrnrlon=min(points[:, 1]) - 1,
             llcrnrlat=min(points[:, 0]) - 1,
             urcrnrlon=max(points[:, 1]) + 1,
             urcrnrlat=max(points[:, 0]) + 1,
-            lat_0=points[len(points) // 2, 0],
-            lon_0=points[len(points) // 2, 1],
+            lat_ts=points[0][0],
         )
 
         m.shadedrelief()

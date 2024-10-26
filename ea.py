@@ -1,8 +1,6 @@
 import concurrent.futures
 
-import matplotlib.pyplot as plt
 import numpy as np
-from icecream import ic
 
 from model import Geneset
 
@@ -49,6 +47,7 @@ class EA:
             "inversion",
         ], "Mutation strategy must be scramble, swap, insertion, or inversion (default)"
         assert xover_strategy in [
+            None,
             "cycle",
             "pmx",
             "ox",
@@ -82,6 +81,8 @@ class EA:
         for i in range(self.population_size * self.reproductive_rate):
             parent1, parent2 = rng.choice(population, 2, replace=False)
             match strategy:
+                case None:
+                    child = parent1
                 case "cycle":
                     child = parent1.cycle_xover(parent2)
                 case _:
@@ -162,7 +163,7 @@ class EA:
                 improvement_rate = (
                     (history[-i // self.window_size][0] - history[-1][0])
                     / (i // self.window_size)
-                    if i > self.min_iters
+                    if i >= self.min_iters
                     else np.inf
                 )
                 if improvement_rate < self.min_improvement_rate:
