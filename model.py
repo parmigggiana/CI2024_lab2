@@ -35,10 +35,17 @@ class Geneset:
         for i in range(self.len):
             self.cost += dist_mat[self.genes[i], self.genes[i - 1]]
 
-    def mutate(self, prob: float) -> Self:  # TODO make it better :)
-        """Return a new Geneset mutating each gene with probability `prob`
-            Mutation is done by swapping two adjacent genes
-            Always keep the first gene fixed
+    def mutate(
+        self,
+        strategy: str = "scramble",
+        prob: float = None,
+    ) -> Self:  # TODO make it better :)
+        """Return a new Geneset mutating according to the selected strategy
+        valid strategies are:
+        - scramble (default)
+            Select some random alleles, scramble them
+        - swap
+            Select two random genes, swap them
         Args:
             prob (float)
 
@@ -46,12 +53,18 @@ class Geneset:
             Geneset
         """
         new_geneset = Geneset(self.genes.copy())
-        for i in range(2, len(new_geneset.genes)):
-            if rng.random() < prob:
-                new_geneset.genes[i], new_geneset.genes[i - 1] = (
-                    new_geneset.genes[i - 1],
-                    new_geneset.genes[i],
-                )
+        match strategy:
+            case "scramble":
+                assert prob is not None, "Scramble mutation requires a probability"
+                mask = rng.random(self.len) < prob
+                scrambled = new_geneset.genes[mask]
+                rng.shuffle(scrambled)
+                new_geneset.genes[mask] = scrambled
+            case "swap":
+                swap_indices = rng.choice(self.len, 2, replace=False)
+                new_geneset.genes[swap_indices] = new_geneset.genes[swap_indices[::-1]]
+            case _:
+                raise ValueError(f"Invalid mutation strategy: {strategy}")
         return new_geneset
 
     def __repr__(self):

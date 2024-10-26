@@ -11,17 +11,18 @@ from icecream import ic
 
 from model import Geneset, get_df, get_distance_matrix
 
-POPULATION_SIZE = 50
+POPULATION_SIZE = 30
 TOURNAMENTS = 2
-REPRODUCTIVE_RATE = 2
-PARENTS = 10
+REPRODUCTIVE_RATE = 3
+PARENTS = 6
 CHAMPIONS_PER_TOURNAMENT = 1
-MUTATION_RATE = 0.5
-MAX_AGE = 1
-MIN_ITERS = 100
-WINDOW_SIZE = 2
+MAX_AGE = 2
+MIN_ITERS = 200
+WINDOW_SIZE = 3
 IMPROVEMENT_RATE_EARLY_STOP = 0.01
-SA_PROB = 0.1
+SA_PROB = 0.3
+STRATEGY = "scramble"  # scramble, swap
+MUTATION_PROB = 0.15  # not used with strategy swap
 
 rng = np.random.Generator(bit_generator=np.random.PCG64(0xDEADBEEF))
 
@@ -43,34 +44,33 @@ def xover(population):  # TODO proper crossover
 
 def select_parents(population: np.ndarray):
     population.sort()
-    selected = population[: PARENTS // TOURNAMENTS]
-    for g in selected[CHAMPIONS_PER_TOURNAMENT:]:
-        g.age += 1
+    selected = np.empty(PARENTS // TOURNAMENTS, dtype=Geneset)
+    i = 0
+    for g in population:
+        if i >= PARENTS // TOURNAMENTS:
+            break
+        if g.age > MAX_AGE or rng.random() < SA_PROB:
+            continue
+        if i >= CHAMPIONS_PER_TOURNAMENT:
+            g.age += 1
+        selected[i] = g
+        i += 1
+    else:  # finished the loop and there's still empty slots to fill
+        selected[i:] = population[: PARENTS // TOURNAMENTS - i]
+
     return selected
 
 
 def select(population):
     # Select the best individuals from the population with simulated annealing
-    selected = np.empty(POPULATION_SIZE, dtype=Geneset)
-    np.sort(population)
-    i = 0
-    for g in population:
-        if i >= POPULATION_SIZE:
-            break
-        if g.age > MAX_AGE or rng.random() < SA_PROB:
-            continue
-        selected[i] = g
-        i += 1
-    else:
-        selected[i:] = population[: POPULATION_SIZE - i]
-    return selected
+    return np.sort(population)[:POPULATION_SIZE]
 
 
 def mutate(population: np.ndarray):
     mutated_population = np.empty_like(population)
     # np.apply_along_axis(, 0, population)
     for i, child in enumerate(population):
-        mutated_population[i] = child.mutate(MUTATION_RATE / child.len)
+        mutated_population[i] = child.mutate(STRATEGY, MUTATION_PROB)
     return mutated_population
 
 
@@ -85,7 +85,7 @@ def main(filename, starting_geneset: np.ndarray = None):
 
         # plot improvement graph
         ax = plt.subplot(121)
-        ax.set_yscale("log")
+        # ax.set_yscale("log")
         for j, h in enumerate(history):
             ax.scatter(
                 [j] * len(h),
@@ -137,7 +137,9 @@ def main(filename, starting_geneset: np.ndarray = None):
                 [f.result() for f in concurrent.futures.as_completed(futures)],
             )
             children = xover(parents)
-            futures = {pool.submit(child.mutate, MUTATION_RATE) for child in children}
+            futures = {
+                pool.submit(child.mutate, STRATEGY, MUTATION_PROB) for child in children
+            }
             mutated_children = np.array(
                 [f.result() for f in concurrent.futures.as_completed(futures)]
             )
