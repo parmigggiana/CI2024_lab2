@@ -3,26 +3,28 @@ TSP
 Using Tournament Selection, Crossover, and Mutation
 """
 
-import itertools
 import concurrent.futures
-import pandas as pd
-import numpy as np
-import geopy.distance
+import itertools
 from typing import Self
+
+import geopy.distance
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 from icecream import ic
 from mpl_toolkits.basemap import Basemap
-import matplotlib.pyplot as plt
 
 FILENAME = "italy.csv"
 POPULATION_SIZE = 50
 TOURNAMENTS = 2
 REPRODUCTIVE_RATE = 2
 PARENTS = 10
-CHAMPIONS_PER_TOURNAMENT = 0
-MUTATION_RATE = 0.6
+CHAMPIONS_PER_TOURNAMENT = 1
+MUTATION_RATE = 0.5
 MAX_AGE = 1
-MIN_ITERS = 400
+MIN_ITERS = 100
 WINDOW_SIZE = 2
+IMPROVEMENT_RATE_EARLY_STOP = 0.05
 
 rng = np.random.Generator(np.random.PCG64(0xDEADBEEF))
 
@@ -66,37 +68,6 @@ class Geneset:
 
     def __le__(self, other):
         return self.cost <= other.cost
-
-    def plot(self, df):
-        points = df[["lat", "lon"]].values[self.genes]
-        # Create a Basemap instance
-        m = Basemap(
-            projection="aeqd",
-            resolution=None,
-            llcrnrlon=min(points[:, 1]) - 1,
-            llcrnrlat=min(points[:, 0]) - 1,
-            urcrnrlon=max(points[:, 1]) + 1,
-            urcrnrlat=max(points[:, 0]) + 1,
-            lat_0=points[len(points) // 2, 0],
-            lon_0=points[len(points) // 2, 1],
-        )
-        m.shadedrelief()
-
-        # Draw coastlines and country boundaries
-        # m.drawcoastlines()
-        # m.drawcountries()
-
-        # Draw parallels and meridians
-        # m.drawparallels(np.arange(-90.0, 91.0, 1.0), labels=[1, 0, 0, 0])
-        # m.drawmeridians(np.arange(-180.0, 181.0, 1.0), labels=[0, 0, 0, 1])
-
-        # Convert latitude and longitude to map projection coordinates
-        x, y = m(points[:, 1], points[:, 0])
-
-        m.plot([x[-1], x[0]], [y[-1], y[0]], "-", color="red")
-        m.plot(x, y, "o-", color="orange")
-        plt.title(f"TSP - {FILENAME} - cost: {self.cost:.2f}")
-        plt.show()
 
     def format_wolfram(self):
         return "Uninplemented"
@@ -145,8 +116,50 @@ def compute_costs(population, distance_matrix):
         geneset.compute_cost(distance_matrix)
 
 
-def main(filename):
+def plot(history, geneset, df):
+    plt.subplots(1, 2, figsize=(16, 10))
 
+    # plot improvement graph
+    ax = plt.subplot(121)
+    ax.set_yscale("log")
+    for j, h in enumerate(history):
+        ax.scatter(
+            [j] * len(h),
+            h,
+            color="blue",
+            alpha=1 / POPULATION_SIZE,
+            marker=".",
+        )
+    ax.plot([h[0] for h in history], color="red")
+    ax.set_title(f"iterations: {len(history)}")
+
+    # plot map
+    plt.subplot(122)
+    points = df[["lat", "lon"]].values[geneset.genes]
+    m = Basemap(
+        projection="aeqd",
+        resolution=None,
+        llcrnrlon=min(points[:, 1]) - 1,
+        llcrnrlat=min(points[:, 0]) - 1,
+        urcrnrlon=max(points[:, 1]) + 1,
+        urcrnrlat=max(points[:, 0]) + 1,
+        lat_0=points[len(points) // 2, 0],
+        lon_0=points[len(points) // 2, 1],
+    )
+
+    m.shadedrelief()
+
+    # Convert latitude and longitude to map projection coordinates
+    x, y = m(points[:, 1], points[:, 0])
+
+    m.plot([x[-1], x[0]], [y[-1], y[0]], "-", color="red")
+    m.plot(x, y, "o-", color="orange")
+    plt.title(f"TSP - {FILENAME} - cost: {geneset.cost:.2f}")
+
+    plt.show()
+
+
+def main(filename):
     df = pd.read_csv(filename, header=None, names=["name", "lat", "lon"])
     distance_matrix = np.zeros((df.shape[0], df.shape[0]))
     for c1, c2 in itertools.combinations(df.itertuples(), 2):
@@ -204,31 +217,18 @@ def main(filename):
                 best_geneset = population[0]
 
             improvement_rate = (
-                (history[-1][0] - history[-i // WINDOW_SIZE][0]) / (i // WINDOW_SIZE)
+                (history[-i // WINDOW_SIZE][0] - history[-1][0]) / (i // WINDOW_SIZE)
                 if i > MIN_ITERS
                 else np.inf
             )
-            if improvement_rate < 0.01:
+            if improvement_rate < IMPROVEMENT_RATE_EARLY_STOP:
                 break
 
-    fig = plt.figure()
-    ax = fig.add_subplot(111)
-    for j, h in enumerate(history):
-        ax.scatter(
-            [j] * len(h),
-            h,
-            color="blue",
-            alpha=1 / POPULATION_SIZE,
-            marker=".",
-        )
-    ax.plot([h[0] for h in history], color="red")
-    ax.set_title(f"iterations: {i} - best cost: {best_geneset.cost:.2f}")
     print(f"Iterations: {i}")
     print(f"Path cost: {best_geneset.cost:.2f}")
     print(f"visited cities:\n{df.iloc[best_geneset.genes].name}")
-    print(f"Wolfram-coded path: {best_geneset.format_wolfram()}")
-    # plt.show()
-    best_geneset.plot(df)
+    # print(f"Wolfram-coded path: {best_geneset.format_wolfram()}")
+    plot(history, best_geneset, df)
 
 
 if __name__ == "__main__":
