@@ -20,6 +20,7 @@ class EA:
         window_size=2,
         min_improvement_rate=0.01,
         sa_prob=0,
+        temperature_update_interval=10,
         mutation_strategy="inversion",
         xover_strategy="cycle",
         mutation_prob=None,
@@ -32,7 +33,9 @@ class EA:
             champions_per_tournament >= 0
         ), "Champions per tournament must be at least 1. Set to 0 to disable"
         assert max_age >= 1, "Max age must be at least 1"
-        assert min_iters >= 1, "Minimum iterations must be at least 1"
+        assert (
+            min_iters >= window_size
+        ), "Minimum iterations must be at least window size"
         assert window_size >= 1, "Window size must be at least 1"
         assert (
             0 <= min_improvement_rate < 1
@@ -40,6 +43,9 @@ class EA:
         assert (
             0 <= sa_prob < 1
         ), "SA probability must be between 0 and 1. Default to 0 (disabled)"
+        assert (
+            temperature_update_interval >= 1
+        ), "The number of iterations between each update of the temperature must be at least 1"
         assert mutation_strategy in [
             "scramble",
             "swap",
@@ -49,9 +55,9 @@ class EA:
         assert xover_strategy in [
             None,
             "cycle",
-            "pmx",
-            "ox",
-            "erx",
+            # "pmx",
+            # "ox",
+            # "erx",
             "inverover",
         ], "Crossover strategy must be cycle (default), pmx, ox, erx, or inverover"
         if mutation_strategy == "scramble":
@@ -72,6 +78,7 @@ class EA:
         self.mutation_strategy = mutation_strategy
         self.xover_strategy = xover_strategy
         self.mutation_prob = mutation_prob
+        self.temperature_update_interval = temperature_update_interval
 
     def xover(self, population, strategy: str = "cycle"):
         # Randomly crossover pairs of parents to create self.population_size children
@@ -85,20 +92,22 @@ class EA:
                     child = parent1
                 case "cycle":
                     child = parent1.cycle_xover(parent2)
+                case "inverover":
+                    child = parent1.inverover_xover(parent2)
                 case _:
                     raise NotImplementedError(f"Strategy {strategy} not implemented")
             children[i] = child
 
         return children
 
-    def select_parents(self, population: np.ndarray):
+    def select_parents(self, population: np.ndarray, temperature=1):
         population.sort()
         selected = np.empty(self.parents // self.tournaments, dtype=Geneset)
         i = 0
         for g in population:
             if i >= self.parents // self.tournaments:
                 break
-            if g.age > self.max_age or rng.random() < self.sa_prob:
+            if g.age > self.max_age or rng.random() < self.sa_prob / temperature:
                 continue
             if i >= self.champions_per_tournament:
                 g.age += 1
@@ -131,6 +140,7 @@ class EA:
 
         best_geneset = population[np.argmin([g.cost for g in population])]
         i = 0
+        temp = 1
         history = []
 
         with concurrent.futures.ThreadPoolExecutor(self.tournaments) as pool:
@@ -138,7 +148,9 @@ class EA:
                 i += 1
                 batches = np.array_split(population, self.tournaments)
 
-                futures = {pool.submit(self.select_parents, batch) for batch in batches}
+                futures = {
+                    pool.submit(self.select_parents, batch, temp) for batch in batches
+                }
                 parents = np.concatenate(
                     [f.result() for f in concurrent.futures.as_completed(futures)],
                 )
@@ -165,6 +177,11 @@ class EA:
                     if i >= self.min_iters
                     else np.inf
                 )
+                if i % self.temperature_update_interval == 0:
+                    if improvement_rate < self.min_improvement_rate * 10:
+                        temp *= 1.2
+                    else:
+                        temp /= 1.2
                 if improvement_rate < self.min_improvement_rate:
                     break
 
