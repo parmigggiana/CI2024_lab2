@@ -98,6 +98,7 @@ class Geneset:
                     new_genes = new_genes[::-1]
                     invert_indices = invert_indices[::-1]
                     invert_indices[0] += 1
+
                 new_genes[invert_indices[0] : invert_indices[1]] = new_genes[
                     invert_indices[0] : invert_indices[1]
                 ][::-1]
@@ -170,4 +171,22 @@ class Geneset:
             if parent2._genes[i] not in child:
                 child[j] = parent2._genes[i]
                 j += 1
+        return Geneset(np.concatenate([[self._true_genes[0]], child]))
+
+    def inverover_xover(self, parent2):
+        first_locus = rng.choice(np.arange(self._len), 1, replace=False)[0]
+        first_gene = self._genes[first_locus]
+        matching_locus = np.nonzero(parent2._genes == first_gene)[0][0]
+        second_gene = parent2._genes[matching_locus]
+        # find the corresponding locus in parent1
+        second_locus = np.nonzero(self._genes == second_gene)[0][0]
+
+        child = self._genes.copy()
+        p1 = (first_locus + 1) % self._len
+        p2 = (second_locus + 1) % self._len
+        if p1 > p2:
+            p1, p2 = p2 + 1, p1
+            child = child[::-1]
+        child[p1:p2] = self._genes[p1:p2][::-1]
+
         return Geneset(np.concatenate([[self._true_genes[0]], child]))
