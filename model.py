@@ -146,7 +146,7 @@ class Geneset:
 
         m.plot([x[-1], x[0]], [y[-1], y[0]], "-", color="orange")
         m.plot(x, y, "o-", color="orange")
-        plt.title(f"cost: {self.cost:.2f}")
+        plt.title(f"cost: {self.cost:.2f} km")
 
     def cycle_xover(self, parent2):
         selected_loci = rng.choice(np.arange(self._len), 2, replace=False)

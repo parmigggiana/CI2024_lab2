@@ -17,7 +17,7 @@ class EA:
         champions_per_tournament=0,
         max_age=2,
         min_iters=100,
-        window_size=2,
+        window_size=1 / 2,
         min_improvement_rate=0.01,
         sa_prob=0,
         temperature_update_interval=10,
@@ -34,12 +34,12 @@ class EA:
         ), "Champions per tournament must be at least 1. Set to 0 to disable"
         assert max_age >= 1, "Max age must be at least 1"
         assert (
-            min_iters >= window_size
-        ), "Minimum iterations must be at least window size"
-        assert window_size >= 1, "Window size must be at least 1"
+            min_iters >= 1 / window_size
+        ), "Minimum iterations must be at least (1 / window size)"
+        assert 0 < window_size <= 1, "Window size must be in (0, 1]"
         assert (
-            0 <= min_improvement_rate < 1
-        ), "Minimum improvement rate must be between 0 and 1. Default to 0.01"
+            min_improvement_rate > 0
+        ), "Minimum improvement rate must be non-negative. Default to 0.1"
         assert (
             0 <= sa_prob < 1
         ), "SA probability must be between 0 and 1. Default to 0 (disabled)"
@@ -107,13 +107,18 @@ class EA:
         for g in population:
             if i >= self.parents // self.tournaments:
                 break
-            if g.age > self.max_age or rng.random() < self.sa_prob / temperature:
+            # if g.age >= self.max_age:
+            #     continue
+            if rng.random() < (self.sa_prob * temperature):
                 continue
-            if i >= self.champions_per_tournament:
-                g.age += 1
+            # if i < self.champions_per_tournament:
+            #     g.age -= 1
             selected[i] = g
             i += 1
-        else:  # finished the loop and there's still empty slots to fill
+        if (
+            i < self.parents // self.tournaments
+        ):  # finished the loop and there's still empty slots to fill
+            # print(i, selected, "sa_prob or temperature too high")
             selected[i:] = population[: self.parents // self.tournaments - i]
 
         return selected
@@ -143,17 +148,20 @@ class EA:
         temp = 1
         history = []
 
-        with concurrent.futures.ThreadPoolExecutor(self.tournaments) as pool:
+        with concurrent.futures.ThreadPoolExecutor() as pool:
             while True:
                 i += 1
-                batches = np.array_split(population, self.tournaments)
 
+                # Parent selection
+                batches = np.array_split(population, self.tournaments)
                 futures = {
                     pool.submit(self.select_parents, batch, temp) for batch in batches
                 }
                 parents = np.concatenate(
                     [f.result() for f in concurrent.futures.as_completed(futures)],
                 )
+
+                # Crossover
                 children = self.xover(parents, self.xover_strategy)
                 futures = {
                     pool.submit(
@@ -161,28 +169,38 @@ class EA:
                     )
                     for child in children
                 }
+
+                # Mutation
                 mutated_children = np.array(
                     [f.result() for f in concurrent.futures.as_completed(futures)]
                 )
 
+                # Survivor selection
                 population = np.concatenate([population, mutated_children])
                 population = self.select(population)
+                # for g in population: # Aging seems to be bugged, not sure why but might have to do with the hash function
+                # g.age += 1
+
                 history.append([g.cost for g in population])
                 if population[0].cost < best_geneset.cost:
                     best_geneset = population[0]
 
                 improvement_rate = (
-                    (history[-i // self.window_size][0] - history[-1][0])
-                    / (i // self.window_size)
-                    if i >= self.min_iters
-                    else np.inf
+                    (history[-int(i * self.window_size)][0] - history[-1][0])
+                    / (int(i * self.window_size))
+                    if (int(i * self.window_size)) > 0
+                    else (history[0][0] - history[-1][0]) / i
                 )
                 if i % self.temperature_update_interval == 0:
-                    if improvement_rate < self.min_improvement_rate * 10:
+                    local_improvement_rate = (
+                        history[-self.temperature_update_interval][0] - history[-1][0]
+                    ) / (self.temperature_update_interval)
+                    if local_improvement_rate <= self.min_improvement_rate * 10:
                         temp *= 1.2
                     else:
-                        temp /= 1.2
-                if improvement_rate < self.min_improvement_rate:
+                        temp /= 1.1
+
+                if i >= self.min_iters and improvement_rate < self.min_improvement_rate:
                     break
 
             return best_geneset, i, history
